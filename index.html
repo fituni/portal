@@ -411,15 +411,23 @@
     background: var(--bg2); border: 1px solid var(--border);
     border-left: 4px solid var(--border);
     border-radius: var(--radius-sm); padding: 12px 13px;
-    margin-bottom: 8px; cursor: pointer;
+    margin-bottom: 8px;
     transition: background 0.15s;
   }
   .kcase-card:hover { background: var(--bg3); }
-  .kcase-card.alert-over  { border-left-color: #9B59B6; }
-  .kcase-card.alert-3days { border-left-color: #E67E22; }
-  .kcase-card.alert-week  { border-left-color: #F1C40F; }
+  .kcase-card.alert-over  { border-left-color: #E24B4A; }
+  .kcase-card.alert-3days { border-left-color: #E8930a; }
+  .kcase-card.alert-week  { border-left-color: #1D9E75; }
   .kcase-card.alert-done  { border-left-color: #888780; opacity: 0.6; }
-  .kcase-card.alert-ok    { border-left-color: #1D9E75; }
+  .kcase-card.alert-ok    { border-left-color: var(--border); }
+
+  /* カテゴリセクション */
+  .kcase-section { margin-bottom: 20px; }
+  .kcase-section-label {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.1em;
+    color: var(--text3); text-transform: uppercase;
+    margin-bottom: 8px; padding-left: 2px;
+  }
 
   .kcase-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
   .kcase-name { font-size: 13px; font-weight: 700; color: var(--text); flex: 1; }
@@ -961,7 +969,6 @@
 <!-- ══ 案件・内部資料タブ ══ -->
 <div id="tab-docs" class="tab-content">
 
-  <!-- ツールバー -->
   <div class="cases-toolbar">
     <div class="cases-toolbar-left">
       <button class="filter-btn on" onclick="setFilter('all', this)">すべて</button>
@@ -1004,8 +1011,8 @@
       </div>
     </div>
     <div class="mform-row">
-      <div class="mform-label">期限</div>
-      <input class="mform-input" id="kf-deadline" type="date">
+      <div class="mform-label">期限（例：2026/06/30・6月中・7月上旬）</div>
+      <input class="mform-input" id="kf-deadline" placeholder="例）2026/06/30 または 6月中" autocomplete="off">
     </div>
     <div class="mform-row">
       <div class="mform-label">次アクション</div>
@@ -1276,8 +1283,10 @@
   function getAlert(c) {
     if (c.status === 'done') return 'alert-done';
     if (!c.deadline) return 'alert-ok';
+    const parsed = Date.parse(c.deadline.replace(/\//g, '-'));
+    if (isNaN(parsed)) return 'alert-ok';
     const today = new Date(); today.setHours(0,0,0,0);
-    const due   = new Date(c.deadline); due.setHours(0,0,0,0);
+    const due   = new Date(parsed); due.setHours(0,0,0,0);
     const diff  = Math.floor((due - today) / 86400000);
     if (diff < 0)  return 'alert-over';
     if (diff <= 3) return 'alert-3days';
@@ -1287,16 +1296,7 @@
 
   function fmtDate(dateStr) {
     if (!dateStr) return '';
-    const d = new Date(dateStr);
-    return `${d.getMonth()+1}/${d.getDate()}`;
-  }
-
-  function alertIcon(cls) {
-    if (cls === 'alert-over')  return '🟣';
-    if (cls === 'alert-3days') return '🟠';
-    if (cls === 'alert-week')  return '🟡';
-    if (cls === 'alert-done')  return '⚫️';
-    return '';
+    return dateStr;
   }
 
   function setFilter(f, btn) {
@@ -1363,33 +1363,43 @@
   function renderKcases() {
     const list  = document.getElementById('kcase-list');
     const empty = document.getElementById('kcase-empty');
-    const filtered = currentFilter === 'all' ? kcases : kcases.filter(c => c.status === currentFilter);
-
-    // アラート順でソート: over→3days→week→ok→done
     const ORDER = { 'alert-over':0, 'alert-3days':1, 'alert-week':2, 'alert-ok':3, 'alert-done':4 };
-    const sorted = [...filtered].sort((a,b) => ORDER[getAlert(a)] - ORDER[getAlert(b)]);
-
-    if (!sorted.length) { list.innerHTML = ''; empty.style.display = 'block'; return; }
+    const CATEGORIES = [
+      { key: 'active',  label: '進行中' },
+      { key: 'confirm', label: '確認中' },
+      { key: 'won',     label: '成約済' },
+      { key: 'done',    label: '終了'   },
+    ];
+    const filtered = currentFilter === 'all' ? kcases : kcases.filter(c => c.status === currentFilter);
+    if (!filtered.length) { list.innerHTML = ''; empty.style.display = 'block'; return; }
     empty.style.display = 'none';
-    list.innerHTML = sorted.map(c => {
-      const alertCls = getAlert(c);
-      const icon = alertIcon(alertCls);
-      return `
-      <div class="kcase-card ${alertCls}">
-        <div class="kcase-top">
-          <div class="kcase-name">${icon ? icon+' ' : ''}${c.name}</div>
-          <span class="kcase-status ${STATUS_CLASS[c.status]}">${STATUS_LABELS[c.status]}</span>
-        </div>
-        <div class="kcase-meta">
-          ${c.person   ? `<span class="kcase-meta-item">👤 ${c.person}</span>` : ''}
-          ${c.deadline ? `<span class="kcase-meta-item">📅 ${fmtDate(c.deadline)}</span>` : ''}
-        </div>
-        ${c.action ? `<div class="kcase-action"><span class="kcase-action-label">次アクション</span>${c.action}</div>` : ''}
-        ${c.memo ? `<div class="kcase-action" style="margin-top:4px;"><span class="kcase-action-label">備考</span>${c.memo}</div>` : ''}
-        <div class="kcase-btns">
-          <button class="kcase-btn" onclick="openCaseModal(${c.id})">編集</button>
-          <button class="kcase-btn del" onclick="deleteKcase(${c.id})">削除</button>
-        </div>
+    const groups = currentFilter === 'all' ? CATEGORIES : [{ key: currentFilter, label: STATUS_LABELS[currentFilter] }];
+    list.innerHTML = groups.map(cat => {
+      const items = filtered
+        .filter(c => c.status === cat.key)
+        .sort((a,b) => ORDER[getAlert(a)] - ORDER[getAlert(b)]);
+      if (!items.length) return '';
+      return `<div class="kcase-section">
+        <div class="kcase-section-label">${cat.label}</div>
+        ${items.map(c => {
+          const alertCls = getAlert(c);
+          return `<div class="kcase-card ${alertCls}">
+            <div class="kcase-top">
+              <div class="kcase-name">${c.name}</div>
+              <span class="kcase-status ${STATUS_CLASS[c.status]}">${STATUS_LABELS[c.status]}</span>
+            </div>
+            <div class="kcase-meta">
+              ${c.person   ? `<span class="kcase-meta-item">👤 ${c.person}</span>` : ''}
+              ${c.deadline ? `<span class="kcase-meta-item">📅 ${fmtDate(c.deadline)}</span>` : ''}
+            </div>
+            ${c.action ? `<div class="kcase-action"><span class="kcase-action-label">次アクション</span>${c.action}</div>` : ''}
+            ${c.memo   ? `<div class="kcase-action" style="margin-top:4px;"><span class="kcase-action-label">備考</span>${c.memo}</div>` : ''}
+            <div class="kcase-btns">
+              <button class="kcase-btn" onclick="openCaseModal(${c.id})">編集</button>
+              <button class="kcase-btn del" onclick="deleteKcase(${c.id})">削除</button>
+            </div>
+          </div>`;
+        }).join('')}
       </div>`;
     }).join('');
   }
