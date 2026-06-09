@@ -876,8 +876,8 @@
             <div class="priority-stars" data-id="abp-program"></div>
           </div>
           <div class="biz-chips">
-            <span class="biz-chip owner owner-ishii">石井</span>
-            <span class="biz-chip">谷</span>
+            <span class="biz-chip owner owner-tani">谷</span>
+            <span class="biz-chip">石井</span>
             <span class="biz-chip">若山</span>
           </div>
         </div>
@@ -1132,6 +1132,22 @@
 </div>
 
 <script>
+  // ── GAS API ──
+  const GAS_URL = 'https://script.google.com/macros/s/AKfycbyH7qPlXZITZOXYtY9DCcfZ0Wop-44ooXbw-YKPyewwtUtAYt3DrJO1OXF3eVHSQTS9yw/exec';
+
+  async function gasGet(type) {
+    const res = await fetch(`${GAS_URL}?type=${type}`);
+    return res.json();
+  }
+
+  async function gasPost(type, action, data) {
+    const res = await fetch(GAS_URL, {
+      method: 'POST',
+      body: JSON.stringify({ type, action, data }),
+    });
+    return res.json();
+  }
+
   // ── 更新・閉じる ──
   function hardReload() {
     if ('caches' in window) {
@@ -1157,10 +1173,17 @@
   // ── 営業資料 ──
   const CAT_LABELS = { proposal:'提案書', sheet:'説明資料', seminar:'セミナー資料', other:'その他' };
   const CAT_ICONS  = { proposal:'📋', sheet:'📄', seminar:'📊', other:'📁' };
-  let materials = JSON.parse(localStorage.getItem('fu_materials') || '[]');
+  let materials = [];
   let editMatId = null;
 
-  function saveMaterials() { localStorage.setItem('fu_materials', JSON.stringify(materials)); }
+  async function loadMaterials() {
+    try {
+      materials = await gasGet('materials');
+      renderMaterials();
+    } catch(e) {
+      console.error('営業資料読み込みエラー:', e);
+    }
+  }
 
   function openMatModal(id) {
     editMatId = id ?? null;
@@ -1197,7 +1220,7 @@
     if (e.target === document.getElementById('mat-modal')) closeMatModal();
   }
 
-  function saveMat() {
+  async function saveMat() {
     const name = document.getElementById('mf-name').value.trim();
     if (!name) { document.getElementById('mf-name').focus(); return; }
     const data = {
@@ -1207,21 +1230,27 @@
       url:   document.getElementById('mf-url').value.trim(),
       memo:  document.getElementById('mf-memo').value.trim(),
     };
-    if (editMatId) {
-      Object.assign(materials.find(x => x.id === editMatId), data);
-    } else {
-      materials.unshift({ id: Date.now(), ...data });
-    }
-    saveMaterials();
     closeMatModal();
-    renderMaterials();
+    try {
+      if (editMatId) {
+        await gasPost('materials', 'update', { id: editMatId, ...data });
+      } else {
+        await gasPost('materials', 'add', data);
+      }
+      await loadMaterials();
+    } catch(e) {
+      alert('保存に失敗しました: ' + e.message);
+    }
   }
 
-  function deleteMat(id) {
+  async function deleteMat(id) {
     if (!confirm('この資料を削除しますか？')) return;
-    materials = materials.filter(x => x.id !== id);
-    saveMaterials();
-    renderMaterials();
+    try {
+      await gasPost('materials', 'delete', { id });
+      await loadMaterials();
+    } catch(e) {
+      alert('削除に失敗しました: ' + e.message);
+    }
   }
 
   function openPdf(id) {
@@ -1288,16 +1317,34 @@
     document.getElementById('tab-' + id).classList.add('active');
     event.currentTarget.classList.add('active');
     window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (id === 'docs')      loadKcases();
+    if (id === 'materials') loadMaterials();
   }
 
   // ── 案件管理（新） ──
   const STATUS_LABELS = { active:'進行中', confirm:'確認中', pending:'提案中', won:'成約', done:'終了' };
   const STATUS_CLASS  = { active:'ks-active', confirm:'ks-confirm', pending:'ks-pending', won:'ks-won', done:'ks-done' };
-  let kcases = JSON.parse(localStorage.getItem('fu_kcases') || '[]');
+  let kcases = [];
   let editKcaseId = null;
   let currentFilter = 'all';
 
-  function saveKcases() { localStorage.setItem('fu_kcases', JSON.stringify(kcases)); }
+  async function loadKcases() {
+    try {
+      showKcaseLoading(true);
+      kcases = await gasGet('cases');
+      renderKcases();
+    } catch(e) {
+      console.error('案件読み込みエラー:', e);
+    } finally {
+      showKcaseLoading(false);
+    }
+  }
+
+  function showKcaseLoading(on) {
+    const empty = document.getElementById('kcase-empty');
+    if (on) { empty.textContent = '読み込み中…'; empty.style.display = 'block'; }
+    else { empty.textContent = '案件はまだありません'; }
+  }
 
   function getAlert(c) {
     if (c.status === 'done') return 'alert-done';
@@ -1353,7 +1400,7 @@
     if (e.target === document.getElementById('case-modal')) closeCaseModal();
   }
 
-  function saveCaseNew() {
+  async function saveCaseNew() {
     const name = document.getElementById('kf-name').value.trim();
     if (!name) { document.getElementById('kf-name').focus(); return; }
     const data = {
@@ -1364,21 +1411,27 @@
       action:   document.getElementById('kf-action').value.trim(),
       memo:     document.getElementById('kf-memo').value.trim(),
     };
-    if (editKcaseId) {
-      Object.assign(kcases.find(x => x.id === editKcaseId), data);
-    } else {
-      kcases.unshift({ id: Date.now(), ...data });
-    }
-    saveKcases();
     closeCaseModal();
-    renderKcases();
+    try {
+      if (editKcaseId) {
+        await gasPost('cases', 'update', { id: editKcaseId, ...data });
+      } else {
+        await gasPost('cases', 'add', data);
+      }
+      await loadKcases();
+    } catch(e) {
+      alert('保存に失敗しました: ' + e.message);
+    }
   }
 
-  function deleteKcase(id) {
+  async function deleteKcase(id) {
     if (!confirm('この案件を削除しますか？')) return;
-    kcases = kcases.filter(x => x.id !== id);
-    saveKcases();
-    renderKcases();
+    try {
+      await gasPost('cases', 'delete', { id });
+      await loadKcases();
+    } catch(e) {
+      alert('削除に失敗しました: ' + e.message);
+    }
   }
 
   function renderKcases() {
