@@ -255,7 +255,6 @@
   @media (prefers-color-scheme: dark) {
     .biz-chip.owner { background: #501313; border-color: #F09595; color: #F7C1C1; }
   }
-
   /* 責任者凡例 */
   .owner-legend {
     display: flex; flex-wrap: wrap; gap: 6px;
@@ -871,14 +870,28 @@
         <div class="biz-card bc-abp">
           <div class="biz-card-inner">
             <div class="biz-left">
-              <div class="biz-name">ABP</div>
-              <div class="biz-desc">ダイエットプログラム・コーチ育成（対面／オンライン）</div>
+              <div class="biz-name">ABP — ダイエットプログラム</div>
+              <div class="biz-desc">対面／オンラインのダイエットプログラム</div>
             </div>
-            <div class="priority-stars" data-id="abp"></div>
+            <div class="priority-stars" data-id="abp-program"></div>
           </div>
           <div class="biz-chips">
-            <span class="biz-chip owner owner-tani">谷</span>
-            <span class="biz-chip">石井</span>
+            <span class="biz-chip owner owner-ishii">石井</span>
+            <span class="biz-chip">谷</span>
+            <span class="biz-chip">若山</span>
+          </div>
+        </div>
+        <div class="biz-card bc-abp">
+          <div class="biz-card-inner">
+            <div class="biz-left">
+              <div class="biz-name">ABP — ダイエットコミュニティ</div>
+              <div class="biz-desc">ダイエットコーチ育成・コミュニティ運営</div>
+            </div>
+            <div class="priority-stars" data-id="abp-community"></div>
+          </div>
+          <div class="biz-chips">
+            <span class="biz-chip owner owner-ishii">石井</span>
+            <span class="biz-chip">谷</span>
             <span class="biz-chip">若山</span>
           </div>
         </div>
@@ -1144,8 +1157,10 @@
   // ── 営業資料 ──
   const CAT_LABELS = { proposal:'提案書', sheet:'説明資料', seminar:'セミナー資料', other:'その他' };
   const CAT_ICONS  = { proposal:'📋', sheet:'📄', seminar:'📊', other:'📁' };
-  let materials = [];
+  let materials = JSON.parse(localStorage.getItem('fu_materials') || '[]');
   let editMatId = null;
+
+  function saveMaterials() { localStorage.setItem('fu_materials', JSON.stringify(materials)); }
 
   function openMatModal(id) {
     editMatId = id ?? null;
@@ -1197,6 +1212,7 @@
     } else {
       materials.unshift({ id: Date.now(), ...data });
     }
+    saveMaterials();
     closeMatModal();
     renderMaterials();
   }
@@ -1204,6 +1220,7 @@
   function deleteMat(id) {
     if (!confirm('この資料を削除しますか？')) return;
     materials = materials.filter(x => x.id !== id);
+    saveMaterials();
     renderMaterials();
   }
 
@@ -1276,9 +1293,11 @@
   // ── 案件管理（新） ──
   const STATUS_LABELS = { active:'進行中', confirm:'確認中', pending:'提案中', won:'成約', done:'終了' };
   const STATUS_CLASS  = { active:'ks-active', confirm:'ks-confirm', pending:'ks-pending', won:'ks-won', done:'ks-done' };
-  let kcases = [];
+  let kcases = JSON.parse(localStorage.getItem('fu_kcases') || '[]');
   let editKcaseId = null;
   let currentFilter = 'all';
+
+  function saveKcases() { localStorage.setItem('fu_kcases', JSON.stringify(kcases)); }
 
   function getAlert(c) {
     if (c.status === 'done') return 'alert-done';
@@ -1350,6 +1369,7 @@
     } else {
       kcases.unshift({ id: Date.now(), ...data });
     }
+    saveKcases();
     closeCaseModal();
     renderKcases();
   }
@@ -1357,6 +1377,7 @@
   function deleteKcase(id) {
     if (!confirm('この案件を削除しますか？')) return;
     kcases = kcases.filter(x => x.id !== id);
+    saveKcases();
     renderKcases();
   }
 
@@ -1407,10 +1428,10 @@
   renderKcases();
 
   // ★ 優先度
-  const priorities = {};
+  const priorities = JSON.parse(localStorage.getItem('fu_priorities') || '{}');
   document.querySelectorAll('.priority-stars').forEach(container => {
     const id = container.dataset.id;
-    priorities[id] = 0;
+    if (priorities[id] === undefined) priorities[id] = 0;
     renderStars(container, id);
   });
 
@@ -1422,6 +1443,7 @@
       s.textContent = '★';
       s.addEventListener('click', () => {
         priorities[id] = (priorities[id] === i) ? 0 : i;
+        localStorage.setItem('fu_priorities', JSON.stringify(priorities));
         renderStars(container, id);
       });
       container.appendChild(s);
