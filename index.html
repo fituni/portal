@@ -1143,17 +1143,32 @@
   // ── GAS API ──
   const GAS_URL = 'https://script.google.com/macros/s/AKfycbxc3gcdRdcaLM1Oiohnkcm5FFbVSNd81dGrVc6GYhgirBdnE3AP7jUCdemav2klCrba5g/exec';
 
-  async function gasGet(type) {
-    const res = await fetch(`${GAS_URL}?type=${type}`);
-    return res.json();
+  // GAS通信（JSONP経由でCORS回避）
+  function gasGet(type) {
+    return new Promise((resolve, reject) => {
+      const cbName = '_cb' + Date.now();
+      const script = document.createElement('script');
+      window[cbName] = (data) => {
+        delete window[cbName];
+        document.body.removeChild(script);
+        resolve(data);
+      };
+      script.onerror = () => { delete window[cbName]; reject(new Error('JSONP error')); };
+      script.src = `${GAS_URL}?type=${type}&callback=${cbName}`;
+      document.body.appendChild(script);
+      setTimeout(() => { if (window[cbName]) { delete window[cbName]; reject(new Error('timeout')); }}, 10000);
+    });
   }
 
   async function gasPost(type, action, data) {
+    // POSTはfetch（GASが同一オリジンリダイレクト後にJSONを返す）
     const res = await fetch(GAS_URL, {
       method: 'POST',
+      redirect: 'follow',
       body: JSON.stringify({ type, action, data }),
     });
-    return res.json();
+    const text = await res.text();
+    try { return JSON.parse(text); } catch(e) { console.error('GAS response:', text); throw e; }
   }
 
   // ── 更新・閉じる ──
@@ -1397,10 +1412,9 @@
 
   function fmtDate(dateStr) {
     if (!dateStr) return '';
-    // YYYY/MM/DD または YYYY-MM-DD 形式を「YYYY年M月D日」に変換
     const m = String(dateStr).match(/^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})/);
-    if (m) return `${m[1]}年${parseInt(m[2])}月${parseInt(m[3])}日`;
-    return dateStr; // 「6月中」などはそのまま表示
+    if (m) return parseInt(m[2]) + '月' + parseInt(m[3]) + '日';
+    return dateStr;
   }
 
   function setFilter(f, btn) {
