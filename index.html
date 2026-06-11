@@ -1116,6 +1116,11 @@
   <iframe class="pdf-frame" id="pdf-frame" allowfullscreen></iframe>
 </div>
 
+<!-- 案件詳細モーダル -->
+<div class="modal-overlay" id="case-detail-modal" onclick="if(event.target===this)closeCaseDetail()">
+  <div class="modal-sheet" id="case-detail-content"></div>
+</div>
+
 <!-- ══ イベント・スケジュールタブ ══ -->
 <div id="tab-events" class="tab-content">
   <div class="section-block">
@@ -1392,7 +1397,10 @@
 
   function fmtDate(dateStr) {
     if (!dateStr) return '';
-    return dateStr;
+    // YYYY/MM/DD または YYYY-MM-DD 形式を「YYYY年M月D日」に変換
+    const m = String(dateStr).match(/^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})/);
+    if (m) return `${m[1]}年${parseInt(m[2])}月${parseInt(m[3])}日`;
+    return dateStr; // 「6月中」などはそのまま表示
   }
 
   function setFilter(f, btn) {
