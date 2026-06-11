@@ -1412,9 +1412,15 @@
 
   function fmtDate(dateStr) {
     if (!dateStr) return '';
-    const m = String(dateStr).match(/^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})/);
-    if (m) return parseInt(m[2]) + '月' + parseInt(m[3]) + '日';
-    return dateStr;
+    const s = String(dateStr);
+    // YYYY/MM/DD または YYYY-MM-DD 形式
+    const m1 = s.match(/^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})/);
+    if (m1) return parseInt(m1[2]) + '月' + parseInt(m1[3]) + '日';
+    // Date文字列（GASから来るケース）
+    const d = new Date(s);
+    if (!isNaN(d.getTime())) return (d.getMonth()+1) + '月' + d.getDate() + '日';
+    // 「6月中」などテキストはそのまま
+    return s;
   }
 
   function setFilter(f, btn) {
