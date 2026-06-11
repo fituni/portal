@@ -511,6 +511,26 @@
     .mform-save { background: #042C53; color: #B5D4F4; border-color: #85B7EB; }
   }
 
+  /* ローディング */
+  .tab-loading {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 0;
+    gap: 12px;
+  }
+  .tab-loading.show { display: flex; }
+  .loading-spinner {
+    width: 28px; height: 28px;
+    border: 2px solid var(--border);
+    border-top-color: #378ADD;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-text { font-size: 13px; color: var(--text3); }
+
   .footer-tip {
     font-size: 11px; color: var(--text3);
     text-align: center; margin-top: 28px;
@@ -993,6 +1013,11 @@
     <button class="new-case-btn" onclick="openCaseModal()">＋ 案件追加</button>
   </div>
 
+  <!-- ローディング -->
+  <div class="tab-loading" id="kcase-loading">
+    <div class="loading-spinner"></div>
+    <div class="loading-text">Loading...</div>
+  </div>
   <!-- 案件リスト -->
   <div id="kcase-list"></div>
   <div class="empty-cases" id="kcase-empty">案件はまだありません</div>
@@ -1049,6 +1074,11 @@
     <button class="new-case-btn" onclick="openMatModal()">＋ 資料追加</button>
   </div>
 
+  <!-- ローディング -->
+  <div class="tab-loading" id="mat-loading">
+    <div class="loading-spinner"></div>
+    <div class="loading-text">Loading...</div>
+  </div>
   <!-- 作成済み -->
   <div class="mat-section">
     <div class="mat-section-label">作成済み</div>
@@ -1200,12 +1230,16 @@
   let editMatId = null;
 
   async function loadMaterials() {
+    const loading = document.getElementById('mat-loading');
     try {
+      loading.classList.add('show');
       const result = await gasGet('materials');
       materials = Array.isArray(result) ? result : [];
       renderMaterials();
     } catch(e) {
       console.error('営業資料読み込みエラー:', e);
+    } finally {
+      loading.classList.remove('show');
     }
   }
 
@@ -1391,9 +1425,16 @@
   }
 
   function showKcaseLoading(on) {
-    const empty = document.getElementById('kcase-empty');
-    if (on) { empty.textContent = '読み込み中…'; empty.style.display = 'block'; }
-    else { empty.textContent = '案件はまだありません'; }
+    const loading = document.getElementById('kcase-loading');
+    const list    = document.getElementById('kcase-list');
+    const empty   = document.getElementById('kcase-empty');
+    if (on) {
+      loading.classList.add('show');
+      list.innerHTML = '';
+      empty.style.display = 'none';
+    } else {
+      loading.classList.remove('show');
+    }
   }
 
   function getAlert(c) {
