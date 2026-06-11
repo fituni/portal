@@ -1049,12 +1049,14 @@
     <button class="new-case-btn" onclick="openMatModal()">＋ 資料追加</button>
   </div>
 
+  <!-- 作成済み -->
   <div class="mat-section">
     <div class="mat-section-label">作成済み</div>
     <div id="mat-done-list"></div>
     <div class="empty-cases" id="mat-done-empty">資料はまだありません</div>
   </div>
 
+  <!-- 作成予定 -->
   <div class="mat-section">
     <div class="mat-section-label">作成予定</div>
     <div id="mat-todo-list"></div>
@@ -1082,15 +1084,16 @@
       </div>
       <div>
         <div class="mform-label">状態</div>
-        <select class="mform-input" id="mf-state">
-          <option value="done">作成済み</option>
+        <select class="mform-input" id="mf-state" onchange="toggleMatUrlRow()">
           <option value="todo">作成予定</option>
+          <option value="done">作成済み</option>
         </select>
       </div>
     </div>
-    <div class="mform-row" id="mf-url-row">
-      <div class="mform-label">PDF URL（GitHubのraw URL）</div>
-      <input class="mform-input" id="mf-url" placeholder="https://raw.githubusercontent.com/..." autocomplete="off">
+    <div class="mform-row" id="mf-url-row" style="display:none;">
+      <div class="mform-label">GoogleドライブのURL</div>
+      <input class="mform-input" id="mf-url" placeholder="https://drive.google.com/file/d/..." autocomplete="off">
+      <div style="font-size:10px; color:var(--text3); margin-top:4px;">※ ドライブで「リンクを知っている全員が閲覧可」に設定してください</div>
     </div>
     <div class="mform-row">
       <div class="mform-label">備考</div>
@@ -1103,14 +1106,14 @@
   </div>
 </div>
 
-<!-- PDFビューワー -->
+<!-- PDFビューワー（Googleドライブ埋め込み） -->
 <div class="pdf-overlay" id="pdf-overlay">
   <div class="pdf-toolbar">
     <button class="pdf-close-btn" onclick="closePdf()">✕ 閉じる</button>
     <div class="pdf-title" id="pdf-title"></div>
-    <a class="pdf-dl-btn" id="pdf-dl-link" download>⬇ DL</a>
+    <a class="pdf-dl-btn" id="pdf-dl-link" target="_blank">↗ 開く</a>
   </div>
-  <iframe class="pdf-frame" id="pdf-frame"></iframe>
+  <iframe class="pdf-frame" id="pdf-frame" allowfullscreen></iframe>
 </div>
 
 <!-- ══ イベント・スケジュールタブ ══ -->
@@ -1178,11 +1181,20 @@
 
   async function loadMaterials() {
     try {
-      materials = await gasGet('materials');
+      const result = await gasGet('materials');
+      materials = Array.isArray(result) ? result : [];
       renderMaterials();
     } catch(e) {
       console.error('営業資料読み込みエラー:', e);
     }
+  }
+
+  async function promoteToMat(id) {
+    const m = materials.find(x => x.id === id);
+    if (!m) return;
+    openMatModal(id);
+    document.getElementById('mf-state').value = 'done';
+    toggleMatUrlRow();
   }
 
   function openMatModal(id) {
@@ -1200,16 +1212,15 @@
       document.getElementById('mf-cat').value   = 'proposal';
       document.getElementById('mf-state').value = 'done';
     }
-    toggleUrlRow();
+    toggleMatUrlRow();
     document.getElementById('mat-modal').classList.add('open');
     setTimeout(() => document.getElementById('mf-name').focus(), 100);
   }
 
-  function toggleUrlRow() {
+  function toggleMatUrlRow() {
     const state = document.getElementById('mf-state').value;
     document.getElementById('mf-url-row').style.display = state === 'done' ? 'block' : 'none';
   }
-  document.getElementById('mf-state').addEventListener('change', toggleUrlRow);
 
   function closeMatModal() {
     document.getElementById('mat-modal').classList.remove('open');
@@ -1253,13 +1264,22 @@
     }
   }
 
+  function driveEmbedUrl(url) {
+    // https://drive.google.com/file/d/FILE_ID/view → 埋め込みURLに変換
+    const m = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    if (m) return `https://drive.google.com/file/d/${m[1]}/preview`;
+    // 共有URL（?id=）形式
+    const m2 = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+    if (m2) return `https://drive.google.com/file/d/${m2[1]}/preview`;
+    return url;
+  }
+
   function openPdf(id) {
     const m = materials.find(x => x.id === id);
     if (!m || !m.url) return;
     document.getElementById('pdf-title').textContent = m.name;
-    document.getElementById('pdf-frame').src = m.url;
+    document.getElementById('pdf-frame').src = driveEmbedUrl(m.url);
     document.getElementById('pdf-dl-link').href = m.url;
-    document.getElementById('pdf-dl-link').setAttribute('download', m.name + '.pdf');
     document.getElementById('pdf-overlay').classList.add('open');
   }
 
@@ -1281,14 +1301,17 @@
     else {
       doneEmpty.style.display = 'none';
       doneList.innerHTML = done.map(m => `
-        <div class="mat-card" onclick="openPdf(${m.id})">
+        <div class="mat-card" onclick="openPdf('${m.id}')">
           <div class="mat-icon">${CAT_ICONS[m.cat] || '📄'}</div>
           <div class="mat-body">
             <div class="mat-name">${m.name}</div>
             <div class="mat-meta">${CAT_LABELS[m.cat]}${m.memo ? ' · ' + m.memo : ''}</div>
           </div>
           <span class="mat-badge mb-done">作成済</span>
-          <button style="font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text2);cursor:pointer;margin-left:4px;" onclick="event.stopPropagation();openMatModal(${m.id})">編集</button>
+        </div>
+        <div style="display:flex;gap:6px;margin:-4px 0 8px;padding:0 2px;">
+          <button class="kcase-btn" onclick="openMatModal('${m.id}')">編集</button>
+          <button class="kcase-btn del" onclick="deleteMat('${m.id}')">削除</button>
         </div>`).join('');
     }
 
@@ -1303,7 +1326,11 @@
             <div class="mat-meta">${CAT_LABELS[m.cat]}${m.memo ? ' · ' + m.memo : ''}</div>
           </div>
           <span class="mat-badge mb-todo">予定</span>
-          <button style="font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text2);cursor:pointer;margin-left:4px;" onclick="openMatModal(${m.id})">編集</button>
+        </div>
+        <div style="display:flex;gap:6px;margin:-4px 0 8px;padding:0 2px;">
+          <button class="kcase-btn" onclick="openMatModal('${m.id}')">編集</button>
+          <button class="kcase-btn" style="border-color:#1D9E75;color:#085041;" onclick="promoteToMat('${m.id}')">✓ 作成済みにする</button>
+          <button class="kcase-btn del" onclick="deleteMat('${m.id}')">削除</button>
         </div>`).join('');
     }
   }
@@ -1331,10 +1358,13 @@
   async function loadKcases() {
     try {
       showKcaseLoading(true);
-      kcases = await gasGet('cases');
+      const result = await gasGet('cases');
+      kcases = Array.isArray(result) ? result : [];
       renderKcases();
     } catch(e) {
       console.error('案件読み込みエラー:', e);
+      kcases = [];
+      renderKcases();
     } finally {
       showKcaseLoading(false);
     }
@@ -1373,10 +1403,10 @@
   }
 
   function openCaseModal(id) {
-    editKcaseId = id ?? null;
+    editKcaseId = id ? String(id) : null;
     document.getElementById('modal-title').textContent = editKcaseId ? '案件を編集' : '案件を追加';
     if (editKcaseId) {
-      const c = kcases.find(x => x.id === editKcaseId);
+      const c = kcases.find(x => String(x.id) === editKcaseId);
       document.getElementById('kf-name').value     = c.name;
       document.getElementById('kf-status').value   = c.status;
       document.getElementById('kf-person').value   = c.person;
@@ -1414,7 +1444,7 @@
     closeCaseModal();
     try {
       if (editKcaseId) {
-        await gasPost('cases', 'update', { id: editKcaseId, ...data });
+        await gasPost('cases', 'update', { id: String(editKcaseId), ...data });
       } else {
         await gasPost('cases', 'add', data);
       }
@@ -1427,7 +1457,7 @@
   async function deleteKcase(id) {
     if (!confirm('この案件を削除しますか？')) return;
     try {
-      await gasPost('cases', 'delete', { id });
+      await gasPost('cases', 'delete', { id: String(id) });
       await loadKcases();
     } catch(e) {
       alert('削除に失敗しました: ' + e.message);
@@ -1467,10 +1497,10 @@
               ${c.deadline ? `<span class="kcase-meta-item">📅 ${fmtDate(c.deadline)}</span>` : ''}
             </div>
             ${c.action ? `<div class="kcase-action"><span class="kcase-action-label">次アクション</span>${c.action}</div>` : ''}
-            ${c.memo   ? `<div class="kcase-action" style="margin-top:4px;"><span class="kcase-action-label">備考</span>${c.memo}</div>` : ''}
             <div class="kcase-btns">
-              <button class="kcase-btn" onclick="openCaseModal(${c.id})">編集</button>
-              <button class="kcase-btn del" onclick="deleteKcase(${c.id})">削除</button>
+              <button class="kcase-btn" onclick="openCaseDetail('${c.id}')">詳細</button>
+              <button class="kcase-btn" onclick="openCaseModal('${c.id}')">編集</button>
+              <button class="kcase-btn del" onclick="deleteKcase('${c.id}')">削除</button>
             </div>
           </div>`;
         }).join('')}
@@ -1479,6 +1509,43 @@
   }
 
   renderKcases();
+
+  // ── 案件詳細 ──
+  function openCaseDetail(id) {
+    const c = kcases.find(x => String(x.id) === String(id));
+    if (!c) return;
+    const STATUS_JP = { active:'進行中', confirm:'確認中', pending:'提案中', won:'成約', done:'終了' };
+    const rows = [
+      ['案件ID',      c.id],
+      ['案件名',      c.name],
+      ['種別',        c.kind || ''],
+      ['主担当',      c.person || ''],
+      ['ステータス',  STATUS_JP[c.status] || c.status],
+      ['期限',        c.deadline || ''],
+      ['次アクション',c.action || ''],
+      ['備考',        c.memo || ''],
+    ];
+    document.getElementById('case-detail-content').innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <div style="font-size:15px;font-weight:700;color:var(--text);">案件詳細</div>
+        <button onclick="closeCaseDetail()" style="font-size:13px;padding:5px 12px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text2);cursor:pointer;">✕ 閉じる</button>
+      </div>
+      ${rows.filter(r => r[1]).map(r => `
+        <div style="margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border2);">
+          <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:3px;">${r[0]}</div>
+          <div style="font-size:13px;color:var(--text);line-height:1.6;">${r[1]}</div>
+        </div>`).join('')}
+      <div style="display:flex;gap:8px;margin-top:16px;">
+        <button class="kcase-btn" onclick="closeCaseDetail();openCaseModal('${c.id}')">編集する</button>
+        <button class="kcase-btn del" onclick="closeCaseDetail();deleteKcase('${c.id}')">削除する</button>
+      </div>
+    `;
+    document.getElementById('case-detail-modal').classList.add('open');
+  }
+
+  function closeCaseDetail() {
+    document.getElementById('case-detail-modal').classList.remove('open');
+  }
 
   // ★ 優先度
   const priorities = JSON.parse(localStorage.getItem('fu_priorities') || '{}');
